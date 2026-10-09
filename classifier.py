@@ -1,89 +1,92 @@
 """
-CSC-128 Assignment 3 starter: Intent classifier
+CSC-128 Capstone Project: Intent classifier
 Roberto Hermida Lujan
 """
+
 import re
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# TODO 1: build a stop word list. Do not include "not" or "no".
-STOP_WORDS = set({"i", "me", "my", "a", "an", "the", "is", "to", "for", "can", "you", "please", "it", "of", "and"})
 
-# TODO 2: five intents, at least six example phrasings each
-TRAINING = {
-    "password_reset": [
-        "reset my password",
-        "forgot my login",
-        "cannot get into my account",
-        "password help",
-        "locked out of my account",
-        "help logging in"
-    ],
-    "wifi_help": [
-        "connect to wifi",
-        "internet is not working",
-        "cannot get online",
-        "wireless network problem",
-        "wifi password",
-        "i need help with wifi"
-    ],
-    "hours": [
-        "when are you open",
-        "what are your hours",
-        "are you open on saturday",
-        "closing time",
-        "how long are you open",
-        "when do you close"
-    ],
-     "account_help": [
-        "help with my account",
-        "i have a problem with my account",
-        "my account is not working",
-        "i need help with my account",
-        "something is wrong with my account",
-        "can you help with my account"
-    ],
-    "student_help": [
-        "i need help with my classes",
-        "where can i find my class schedule",
-        "how do i register for classes",
-        "i need help registering for a class",
-        "where can i find my grades",
-        "how do i drop a class"
-    ],
-    "contact_support": [
-        "how do i contact support",
-        "i need to talk to support",
-        "can i speak with someone",
-        "where can i get support",
-        "i need customer service",
-        "how can i reach support"
-    ]
-
+STOP_WORDS = {
+    "i", "me", "my", "a", "an", "the", "is", "to",
+    "for", "can", "you", "please", "it", "of", "and"
 }
+
+
+TRAINING = {
+    "study_tips": [
+        "give me study tips",
+        "how can I study better",
+        "help me study",
+        "how do I remember information",
+        "what are good study habits",
+        "how should I prepare for a test"
+    ],
+    "study_schedule": [
+        "help me make a study schedule",
+        "plan my study time",
+        "make a study plan",
+        "how should I organize my studying",
+        "help me plan my homework",
+        "divide my time between subjects"
+    ],
+    "explain_topic": [
+        "explain this topic to me",
+        "help me understand this subject",
+        "explain this in simple words",
+        "I do not understand this lesson",
+        "teach me a programming concept",
+        "help me learn a difficult topic"
+    ],
+    "course_help": [
+        "check my course number",
+        "is CSC-128 a valid course number format",
+        "help me with my classes",
+        "I need help with a course",
+        "how do I organize my coursework",
+        "check my class information"
+    ],
+    "time_management": [
+        "how much time should I study",
+        "calculate my study time",
+        "help me manage my time",
+        "how long should my study breaks be",
+        "I have limited time to study",
+        "help me organize my free time"
+    ]
+}
+
 
 RESPONSES = {
-    "password_reset": "Reset your password at password.cpcc.edu.",
-    "wifi_help": "For help connecting to wifi, check your wireless settings and make sure you are connected to the correct network.",
-    "hours": "Our hours are Monday through Friday from 8am to 5pm.",
-    "account_help": "For help with your account, please contact customer support.",
-    "student_help": "Please check online through Brightspace for ongoing coursework or MyCollege for official final grades ",
-    "contact_support": "You can contact customer support for additional help.",
+    "study_tips": "I can help you find study methods that work for your subject.",
+    "study_schedule": "I can help you organize your subjects into a study schedule.",
+    "explain_topic": "Tell me which topic you want explained, and I'll break it down.",
+    "course_help": "I can help check a course number's format or organize your coursework.",
+    "time_management": "Tell me how much time you have available, and we can plan your study time."
 }
 
-FALLBACK = "I am unable to help you with that. I can help you with your password, wifi, hours, account, or with your student info."
 
-# TODO 6: set this using the evidence your tests print out
-DEFAULT_THRESHOLD = 0.0
+FALLBACK = (
+    "I'm not sure what kind of study help you need yet. "
+    "Try asking for study tips, a study schedule, a topic explanation, "
+    "course help, or time management advice."
+)
+
+
+DEFAULT_THRESHOLD = 0.20
 
 
 def normalize(text):
-    """TODO 3: lowercase, remove punctuation, drop stop words."""
+    """Lowercase text, remove punctuation, and drop common words."""
+
     text = text.lower()
-    text = re.sub(r"[^a-z0-9\s]", " ", text)   # punctuation to spaces
-    tokens = text.split()
-    return [t for t in tokens if t not in STOP_WORDS]
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    return [
+        word for word in text.split()
+        if word not in STOP_WORDS
+    ]
 
 
 class IntentClassifier:
@@ -92,47 +95,41 @@ class IntentClassifier:
             training = TRAINING
 
         self.threshold = threshold
-
-        # Store all training phrases and their corresponding intents
         self.phrases = []
         self.labels = []
 
         for intent, examples in training.items():
             for phrase in examples:
-                # Here's a trick, normalize them BEFORE adding them to the phrases
-                words = normalize(phrase)
-                normalized_phrase = " ".join(words)
-
-                self.phrases.append(normalized_phrase)
+                self.phrases.append(" ".join(normalize(phrase)))
                 self.labels.append(intent)
 
-        # Create the TF-IDF vectorizer
         self.vectorizer = TfidfVectorizer()
-
-        # Convert the training phrases into TF-IDF vectors
         self.training_vectors = self.vectorizer.fit_transform(self.phrases)
 
     def classify(self, text):
-        """
-        Return (intent, confidence).
+        """Return the best matching intent and its similarity score."""
 
-        Transform the text, take cosine similarity against every training
-        phrase, find the best score, and return None for the intent when
-        that score is below the threshold.
-        """
+        cleaned_text = " ".join(normalize(text))
 
-        user_vector = self.vectorizer.transform([text])
-        scores = cosine_similarity(user_vector, self.training_vectors)[0]
+        if not cleaned_text.strip():
+            return None, 0.0
+
+        user_vector = self.vectorizer.transform([cleaned_text])
+        scores = cosine_similarity(
+            user_vector, self.training_vectors
+        )[0]
 
         best_index = scores.argmax()
         best_score = scores[best_index]
 
         if best_score < self.threshold:
             return None, best_score
+
         return self.labels[best_index], best_score
 
     def respond(self, text):
-        """Return (reply, intent, confidence)."""
+        """Return a response, intent, and similarity score."""
+
         intent, confidence = self.classify(text)
 
         if intent is None:

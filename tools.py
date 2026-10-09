@@ -4,171 +4,106 @@ Roberto Hermida Lujan
 """
 
 
-# Constants should never ever be modified
-DEFAULT_AVAILABILITY = {
-    "monday": {
-        "rooms" : [
-            "214", 
-            "216"
-        ],
-        "hours" : [
-            "8:00 AM", 
-            "8:00 PM"
-        ]
-    },
-    "tuesday": {
-        "rooms" : [
-            "214"
-        ],
-        "hours" : [
-            "8:00 AM", 
-            "8:00 PM"
-        ]
-    },
-    "tuesday": {
-        "rooms" : [
-            "214", 
-            "216", 
-            "220"
-        ],
-        "hours" : [
-            "8:00 AM", 
-            "8:00 PM"
-        ]
-    },
-    "thursday": {
-        "rooms" : [],
-        "hours" : []
-    },
-    "friday": {
-        "rooms" : [
-            "220"
-        ],
-        "hours" : [
-            "8:00 AM", 
-            "5:00 PM"
-        ]
-    }
-}
 
-# Constants can technically be treated as regular variables 
-# But it is a good convention to manually clone them
-current_availabilities = {}
+import re
 
 
-# This will reset the current availabilities
-def reset_availabilities():
-    current_availabilities.clear();
-    for key, value in DEFAULT_AVAILABILITY.items():
-        current_availabilities[key] = {
-            "rooms" : list(DEFAULT_AVAILABILITY[key]["rooms"]),
-            "hours" : list(DEFAULT_AVAILABILITY[key]["hours"])
-        }
+def check_course_number(course_number):
+    """Check the format of a course number."""
 
-reset_availabilities();
+    course_number = course_number.strip().upper()
 
-def check_availability(day):
-    """Return the rooms free on a given weekday."""
-    free = current_availabilities.get(day.lower(), {})
-    if not free:
-        return f"No study rooms are available on {day}."
-    return f"Available on {day}: " + ", ".join(free["rooms"])
+    if re.fullmatch(r"[A-Z]{3}-\d{3}", course_number):
+        return f"{course_number} has a valid course number format."
 
-def get_hours(day):
-    """TODO 3: return the opening hours for a weekday."""
-    free = current_availabilities.get(day.lower(), {})
-    if not free:
-        return f"No opening hours are available on {day}."
-    return f"Opening hours on {day}: " + ", ".join(free["hours"])
+    return "Use three letters, a hyphen, and three numbers. Example: CSC-128."
 
-def book_room(day, room, name):
-    """
-    TODO 4: reserve a room and remove it from availability.
 
-    Think about what this function should NOT be able to do before you
-    write it. Do not add a delete function.
-    """
-    day = day.lower()
-    room = str(room)
+def calculate_study_time(total_minutes, break_minutes):
+    """Calculate study time after breaks."""
 
-    if day not in current_availabilities:
-        return f"{day} is not a valid weekday."
+    if total_minutes <= 0 or break_minutes < 0:
+        return "Enter a positive study time and a non-negative break time."
 
-    if room not in current_availabilities[day]["rooms"]:
-        return f"Room {room} is not available on {day}."
+    if break_minutes >= total_minutes:
+        return "Break time must be less than total study time."
 
-    current_availabilities[day]["rooms"].remove(room)
+    study_minutes = total_minutes - break_minutes
 
-    return f"Room {room} has been booked for {name} on {day}."
+    return f"You have {study_minutes} minutes of study time."
+
+
+def create_study_schedule(subjects, available_minutes):
+    """Create a simple study schedule for a list of subjects."""
+
+    if not subjects or available_minutes <= 0:
+        return "Provide at least one subject and a positive amount of time."
+
+    minutes_per_subject = available_minutes // len(subjects)
+
+    if minutes_per_subject == 0:
+        return "There is not enough time to assign each subject a minute."
+
+    schedule = []
+
+    for subject in subjects:
+        schedule.append(f"{subject}: {minutes_per_subject} minutes")
+
+    return "\n".join(schedule)
+
 
 AVAILABLE_TOOLS = {
-    "check_availability" : check_availability,
-    "get_hours" : get_hours,
-    "book_room" : book_room,
+    "check_course_number": check_course_number,
+    "calculate_study_time": calculate_study_time,
+    "create_study_schedule": create_study_schedule,
 }
 
 
-# this schema is the only thing the model sees about the function
 TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "check_availability",
-            "description": (
-                "Check which study rooms are free on a given weekday. "
-                "Use this whenever a student asks about room availability."
-            ),
+            "name": "check_course_number",
+            "description": "Check whether a course number follows a format such as CSC-128.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "day": {
-                        "type": "string",
-                        "description": "Weekday name, for example Thursday",
-                    }
+                    "course_number": {"type": "string"}
                 },
-                "required": ["day"],
-            },
-        },
-    },
-    {
-    "type": "function",
-        "function": {
-            "name": "get_hours",
-            "description": "Check the opening hours for a given weekday.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "day": {
-                        "type": "string",
-                        "description": "Weekday name, for example Monday",
-                    }
-                },
-                "required": ["day"],
+                "required": ["course_number"],
             },
         },
     },
     {
         "type": "function",
         "function": {
-            "name": "book_room",
-            "description": "Book an available study room for a student.",
+            "name": "calculate_study_time",
+            "description": "Calculate study time remaining after breaks, in minutes.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "day": {
-                        "type": "string",
-                        "description": "Weekday name, for example Monday",
-                    },
-                    "room": {
-                        "type": "string",
-                        "description": "Study room number, for example 214",
-                    },
-                    "name": {
-                        "type": "string",
-                        "description": "Student's name",
-                    },
+                    "total_minutes": {"type": "integer"},
+                    "break_minutes": {"type": "integer"},
                 },
-                "required": ["day", "room", "name"],
+                "required": ["total_minutes", "break_minutes"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_study_schedule",
+            "description": "Divide available study time evenly among subjects.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subjects": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "available_minutes": {"type": "integer"},
+                },
+                "required": ["subjects", "available_minutes"],
             },
         },
     },
